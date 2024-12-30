@@ -6,11 +6,13 @@
 # the BSD License: https://opensource.org/license/bsd-3-clause/
 
 from io import BytesIO
+import logging
 import os
 from stat import S_ISLNK, ST_MODE
 import tempfile
 from unittest import skipIf
 import shutil
+import ddt
 
 from git import (
     IndexFile,
@@ -41,7 +43,20 @@ from pathlib import Path
 
 HOOKS_SHEBANG = "#!/usr/bin/env sh\n"
 
+log = logging.getLogger(__name__)
+
 is_win_without_bash = is_win and not shutil.which("bash.exe")
+
+
+def _get_windows_ansi_encoding():
+    """Get the encoding specified by the Windows system-wide ANSI active code page."""
+    # locale.getencoding may work but is only in Python 3.11+. Use the registry instead.
+    import winreg
+
+    hklm_path = R"SYSTEM\CurrentControlSet\Control\Nls\CodePage"
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, hklm_path) as key:
+        value, _ = winreg.QueryValueEx(key, "ACP")
+    return f"cp{value}"
 
 
 def _make_hook(git_dir, name, content, make_exec=True):
@@ -57,6 +72,7 @@ def _make_hook(git_dir, name, content, make_exec=True):
     return hp
 
 
+@ddt.ddt
 class TestIndex(TestBase):
     def __init__(self, *args):
         super(TestIndex, self).__init__(*args)
